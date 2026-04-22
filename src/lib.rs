@@ -5,6 +5,9 @@ use std::ops::IndexMut;
 use bincode::Encode;
 use serde::{Deserialize, Serialize};
 
+//! This small crate helps creating a paged vector storage for large arrays of data where most of the vector storage is filled with default values (non-initialized). The idea closely follows virtual memory allocation mechanism in operating systems.
+//! Virtual storage is divided in equal-length chunks (pages) with a page book-keeping mechanism. If the user stores a non-default value, the corresponding page becomes allocated.
+
 /*********************************************************************************************************************************************************/
 /*********************************************************************************************************************************************************/
 
