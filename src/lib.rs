@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::Index;
 use std::ops::IndexMut;
@@ -17,7 +18,7 @@ struct Page<T> {
 	non_default: usize,
 }
 
-impl<T: Clone> Page<T> {
+impl<T: Clone + PartialEq> Page<T> {
 	
 	pub fn new(default: T, len: usize)->Self {
 		return Self {
@@ -85,6 +86,7 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 	pub fn set(&mut self, idx: usize, value: T) {
 		assert!(idx < self.virtual_len);
 		if value == self.default {
+		//if Ordering::Equal == T::total_cmp0(&value, &self.default) {
 			return self.set_default(idx);
 		} else {
 			return self.set_nondefault(idx, value);
@@ -126,6 +128,7 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 		match &self.pages[vpn] {
 			Some(page) => {
 				return page.data[off] == self.default;
+				//return Ordering::Equal == T::total_cmp0(&page.data[off], &self.default);
 			}
 			None => {return true;}
 		}
