@@ -17,7 +17,6 @@
 
 use std::ops::Index;
 use std::ops::IndexMut;
-use std::ops::{Range,RangeFrom,RangeTo,RangeFull,RangeInclusive,RangeToInclusive};
 
 use bincode::Encode;
 use serde::{Deserialize, Serialize};
@@ -92,7 +91,6 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 		match &self.pages[vpn] {
 			Some(page) => {
 				return page.data[off] == self.default;
-				//return Ordering::Equal == T::total_cmp0(&page.data[off], &self.default);
 			}
 			None => {return true;}
 		}
@@ -168,7 +166,7 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 		return &mut self.pages[vpn].as_mut().unwrap().data[off];
 	}
 	
-	/// Returns a contigous slice of vector memory (allocated or not), panics if the slice spans across more than one page.
+	/// Returns a contiguous slice of vector memory (allocated or not), panics if the slice spans across more than one page.
 	pub fn get_page_slice(&self, start: usize, len: usize)->&[T] {
 		assert!(start <= self.vlen);
 		assert!(len <= self.vlen - start);
@@ -188,7 +186,7 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 		}
 	}
 	
-	/// Returns a contigous slice of vector memory (preallocates, if necessary), panics if the slice spans across more than one page.
+	/// Returns a contiguous slice of vector memory (preallocates, if necessary), panics if the slice spans across more than one page.
 	/// 
 	/// # Warning
 	///
@@ -204,7 +202,7 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 	/// - future versions of this crate may change this behavior.
 	#[deprecated(
     since = "0.1.0",
-    note = "get_mut() bypasses sparse bookkeeping; use set() instead"
+    note = "mutable slice access bypasses sparse bookkeeping; use set() instead"
 	)]
 	pub fn get_page_slice_mut(&mut self, start: usize, len: usize)->&mut [T] {
 		assert!(start <= self.vlen);
