@@ -1,12 +1,14 @@
 [package]
 description = "A sparse paged vector with lazy page allocation."
-license = "MIT"
+authors = ["Evgenii Nekhoroshev evgnekhoroshev@gmail.com"]
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/evnekdev/pagedvector"
+homepage = "https://github.com/evnekdev/pagedvector"
 name = "pagedvector"
 version = "0.1.0"
 edition = "2021"
 readme = "README.md"
-keywords = ["vector", "sparse", "paged", "storage"]
+keywords = ["vector", "sparse", "paged", "memory", "storage"]
 categories = ["data-structures"]
 
 [dependencies]
