@@ -3,6 +3,17 @@
 //! 
 //! The idea closely follows virtual memory allocation mechanism in operating systems.
 //! Virtual storage is divided in equal-length chunks (pages) with a page book-keeping mechanism. If the user stores a non-default value, the corresponding page becomes allocated.
+//! 
+//! # Experimental
+//!
+//! `PagedVec` is currently experimental.
+//!
+//! Direct mutable access (`get_mut`, `IndexMut`, mutable slices) bypasses the
+//! internal sparse bookkeeping. The sparse representation itself remains valid,
+//! but allocation statistics and automatic page deallocation are not guaranteed
+//! to remain correct after such modifications.
+//!
+//! Use [`PagedVec::set`] for bookkeeping-safe updates.
 
 use std::ops::Index;
 use std::ops::IndexMut;
@@ -125,7 +136,25 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 		}
 	}
 	
-	/// Return a mutable reference to a stored value. TODO - track exposed pages, check after if any values are non-default to keep the page allocated.
+	/// Returns a mutable reference to the element at `idx`.
+	///
+	/// # Warning
+	///
+	/// This method bypasses the page bookkeeping mechanism. If the value is
+	/// modified through the returned reference, the page's internal
+	/// `non_default` counter is **not** updated.
+	///
+	/// Consequently:
+	///
+	/// - `number_pages_alloc()` may become incorrect;
+	/// - pages containing only default values may not be automatically
+	///   deallocated;
+	/// - future versions of this crate may change this behavior.
+	///
+	/// If bookkeeping consistency is required, use [`PagedVec::set`] instead.
+	///
+	/// After arbitrary mutable modifications, call [`PagedVec::cleanup`] (planned)
+	/// before relying on allocation statistics.
 	pub fn get_mut(&mut self, idx: usize)-> &mut T {
 		assert!(idx < self.vlen);
 		let (vpn, off) = self.split_index(idx);
@@ -206,8 +235,10 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 		}
 		match &mut self.pages[vpn] {
 			Some(page) => {
+				if page.data[off] == self.default {
+					page.non_default += 1;
+				}
 				page.data[off] = value;
-				page.non_default += 1;
 			}
 			None => {/*do nothing*/}
 		}
@@ -228,6 +259,21 @@ impl<T: Clone + PartialEq> Index<usize> for PagedVec<T> {
 	
 }
 
+/// Mutable indexing.
+///
+/// # Warning
+///
+/// Assignments through indexing
+///
+/// ```ignore
+/// vec[i] = value;
+/// ```
+///
+/// bypass the sparse bookkeeping logic in the current implementation.
+/// This means allocation statistics and automatic page deallocation may
+/// become inconsistent.
+///
+/// Prefer [`PagedVec::set`] whenever possible.
 impl<T: Clone + PartialEq> IndexMut<usize> for PagedVec<T> {
 	
 	fn index_mut(&mut self, index: usize)-> &mut Self::Output {

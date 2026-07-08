@@ -31,19 +31,19 @@ Instead of storing a full vector of size `N`, `PagedVec`:
 ## 🛠 Example
 
 ```rust
-use pagedvec::PagedVec;
+use pagedvector::PagedVec;
 
 fn main() {
     let mut vec = PagedVec::new(1_000_000, 0u32, 1024);
 
     // No memory allocated yet
-    assert_eq!(vec.number_pages_allocated(), 0);
+    assert_eq!(vec.number_pages_alloc(), 0);
 
     // Write value
     vec.set(42, 100);
 
     // Now one page is allocated
-    assert!(vec.number_pages_allocated() > 0);
+    assert!(vec.number_pages_alloc() > 0);
 
     // Read values
     assert_eq!(vec[42], 100);
@@ -84,7 +84,7 @@ vec.set(i, value);
 vec.len();
 vec.is_default(i);
 vec.number_pages_total();
-vec.number_pages_allocated();
+vec.number_pages_alloc();
 ```
 
 ---
