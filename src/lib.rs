@@ -155,6 +155,10 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 	///
 	/// After arbitrary mutable modifications, call [`PagedVec::cleanup`] (planned)
 	/// before relying on allocation statistics.
+	#[deprecated(
+    since = "0.1.0",
+    note = "get_mut() bypasses sparse bookkeeping; use set() instead"
+	)]
 	pub fn get_mut(&mut self, idx: usize)-> &mut T {
 		assert!(idx < self.vlen);
 		let (vpn, off) = self.split_index(idx);
@@ -185,6 +189,23 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 	}
 	
 	/// Returns a contigous slice of vector memory (preallocates, if necessary), panics if the slice spans across more than one page.
+	/// 
+	/// # Warning
+	///
+	/// This method bypasses the page bookkeeping mechanism. If the value is
+	/// modified through the returned reference, the page's internal
+	/// `non_default` counter is **not** updated.
+	///
+	/// Consequently:
+	///
+	/// - `number_pages_alloc()` may become incorrect;
+	/// - pages containing only default values may not be automatically
+	///   deallocated;
+	/// - future versions of this crate may change this behavior.
+	#[deprecated(
+    since = "0.1.0",
+    note = "get_mut() bypasses sparse bookkeeping; use set() instead"
+	)]
 	pub fn get_slice_unchecked_mut(&mut self, start: usize, len: usize)->&mut [T] {
 		assert!(start <= self.vlen);
 		assert!(len <= self.vlen - start);
