@@ -293,6 +293,7 @@ impl<T: Clone + PartialEq> Index<usize> for PagedVec<T> {
 /// become inconsistent.
 ///
 /// Prefer [`PagedVec::set`] whenever possible.
+#[allow(deprecated)]
 impl<T: Clone + PartialEq> IndexMut<usize> for PagedVec<T> {
 	
 	fn index_mut(&mut self, index: usize)-> &mut Self::Output {
