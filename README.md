@@ -1,4 +1,4 @@
-# 📦 PagedVec
+# 📦 pagedvector (early experimental crate)
 
 A lightweight Rust crate implementing a **paged virtual vector** optimized for sparse data.
 
@@ -104,6 +104,65 @@ vec.number_pages_allocated();
 - Game worlds
 - Scientific data
 - Memory-constrained environments
+
+---
+## RoadMap
+ Implement more methods to get `Vec<T>`-like feel:
+
+  - is_empty()
+  - page_size()
+  - capacity_pages()
+  - clear()
+  - fill(value)
+  - contains(&value)
+
+  - get(index) -> Option<&T>
+  - get_mut(index) -> Option<&mut T>
+
+  - v[i]      // panics
+  - v.get(i) // returns Option
+
+  - iter()
+  - iter_mut()
+  - enumerate_non_default()
+  - count_non_default()
+  - allocated_pages()
+  - deallocate_empty_pages()
+
+
+  - resize(new_len, default)
+  - truncate(new_len)
+  - push(value)
+  - pop()
+  - extend(iter)
+
+  - Default
+  - From<Vec<T>>
+  - FromIterator<T>
+  - Extend<T>
+  - IntoIterator
+
+
+  - is_allocated(index) -> bool
+  - is_page_allocated(page_index) -> bool
+  - page_index(index) -> usize
+  - page_offset(index) -> usize
+  - allocated_page_indices()
+  - non_default_len()
+  - sparsity()
+  - memory_len_allocated()
+
+  - allocated_fraction()
+  - default_fraction()
+
+  - to_vec()
+  - into_vec()
+  - from_vec(vec, default, psize)
+
+  - shrink_pages()
+  - recount_page(page_index)
+  - recount_all_pages()
+  - deallocate_default_pages()
 
 ---
 
