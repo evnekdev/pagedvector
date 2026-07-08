@@ -11,7 +11,7 @@ It mimics how operating systems manage memory: instead of allocating a full vect
 - 💾 Memory-efficient for sparse data
 - 📄 Fixed-size paging system
 - ⚡ Lazy allocation (allocate on write)
-- 🧹 Automatic deallocation (free empty pages)
+- 🧹 Automatic deallocation when using `set()`
 - 🔍 Familiar API (`get`, `set`, indexing)
 - 📦 Serialization support (`serde`, `bincode`)
 
