@@ -68,7 +68,7 @@ let vec = PagedVec::new(length, default_value, page_size);
 
 ```rust
 vec.get(i);
-vec.get_mut(i);
+vec.set(i, val);
 vec[i];
 ```
 

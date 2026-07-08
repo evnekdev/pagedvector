@@ -169,7 +169,7 @@ impl<T: Clone + PartialEq> PagedVec<T> {
 	}
 	
 	/// Returns a contigous slice of vector memory (allocated or not), panics if the slice spans across more than one page.
-	pub fn get_slice_unchecked(&self, start: usize, len: usize)->&[T] {
+	pub fn get_page_slice(&self, start: usize, len: usize)->&[T] {
 		assert!(start <= self.vlen);
 		assert!(len <= self.vlen - start);
 		if len == 0 {
@@ -206,7 +206,7 @@ impl<T: Clone + PartialEq> PagedVec<T> {
     since = "0.1.0",
     note = "get_mut() bypasses sparse bookkeeping; use set() instead"
 	)]
-	pub fn get_slice_unchecked_mut(&mut self, start: usize, len: usize)->&mut [T] {
+	pub fn get_page_slice_mut(&mut self, start: usize, len: usize)->&mut [T] {
 		assert!(start <= self.vlen);
 		assert!(len <= self.vlen - start);
 		if len == 0 {
@@ -314,7 +314,7 @@ impl<T: Clone + PartialEq> Index<Range<usize>> for PagedVec<T> {
 		let end = range.end;
 		assert!(start <= end);
 		let len = end - start;
-		return self.get_slice_unchecked(start,len);
+		return self.get_page_slice(start,len);
 	}
 }
 
@@ -325,7 +325,7 @@ impl<T: Clone + PartialEq> IndexMut<Range<usize>> for PagedVec<T> {
 		let end = range.end;
 		assert!(start <= end);
 		let len = end - start;
-		return self.get_slice_unchecked_mut(start,len);
+		return self.get_page_slice_mut(start,len);
 	}
 	
 }
@@ -341,7 +341,7 @@ impl<T: Clone + PartialEq> Index<RangeFrom<usize>> for PagedVec<T> {
 		let end = self.len();
 		assert!(start <= end);
 		let len = end - start;
-		return self.get_slice_unchecked(start, len);
+		return self.get_page_slice(start, len);
 	}
 	
 }
@@ -353,7 +353,7 @@ impl<T: Clone + PartialEq> IndexMut<RangeFrom<usize>> for PagedVec<T> {
 		let end = self.len();
 		assert!(start <= end);
 		let len = end - start;
-		return self.get_slice_unchecked_mut(start, len);
+		return self.get_page_slice_mut(start, len);
 	}
 	
 }
@@ -369,7 +369,7 @@ impl<T: Clone + PartialEq> Index<RangeTo<usize>> for PagedVec<T> {
 		let end = range.end;
 		assert!(end <= self.len());
 		let len = end - start;
-		return self.get_slice_unchecked(start, len);
+		return self.get_page_slice(start, len);
 	}
 	
 }
@@ -381,7 +381,7 @@ impl<T: Clone + PartialEq> IndexMut<RangeTo<usize>> for PagedVec<T> {
 		let end = range.end;
 		assert!(end <= self.len());
 		let len = end - start;
-		return self.get_slice_unchecked_mut(start, len);
+		return self.get_page_slice_mut(start, len);
 	}
 	
 }
@@ -394,7 +394,7 @@ impl<T: Clone + PartialEq> Index<RangeFull> for PagedVec<T> {
 	
 	fn index(&self, _: RangeFull)->&Self::Output {
 		let len = self.len();
-		return self.get_slice_unchecked(0, len);
+		return self.get_page_slice(0, len);
 	}
 	
 }
@@ -403,7 +403,7 @@ impl<T: Clone + PartialEq> IndexMut<RangeFull> for PagedVec<T> {
 	
 	fn index_mut(&mut self, _: RangeFull)->&mut Self::Output {
 		let len = self.len();
-		return self.get_slice_unchecked_mut(0, len);
+		return self.get_page_slice_mut(0, len);
 	}
 	
 }
@@ -420,7 +420,7 @@ impl<T: Clone + PartialEq> Index<RangeInclusive<usize>> for PagedVec<T> {
 		assert!(start <= end);
 		assert!(end < self.len());
 		let len = end - start + 1;
-		return self.get_slice_unchecked(start,len);
+		return self.get_page_slice(start,len);
 	}
 	
 }
@@ -433,7 +433,7 @@ impl<T: Clone + PartialEq> IndexMut<RangeInclusive<usize>> for PagedVec<T> {
 		assert!(start <= end);
 		assert!(end < self.len());
 		let len = end - start + 1;
-		return self.get_slice_unchecked_mut(start,len);
+		return self.get_page_slice_mut(start,len);
 	}
 	
 }
@@ -449,7 +449,7 @@ impl<T: Clone + PartialEq> Index<RangeToInclusive<usize>> for PagedVec<T> {
 		let end = range.end;
 		assert!(end < self.len());
 		let len = end - start + 1;
-		return self.get_slice_unchecked(start,len);
+		return self.get_page_slice(start,len);
 	}
 	
 }
@@ -461,7 +461,7 @@ impl<T: Clone + PartialEq> IndexMut<RangeToInclusive<usize>> for PagedVec<T> {
 		let end = range.end;
 		assert!(end < self.len());
 		let len = end - start + 1;
-		return self.get_slice_unchecked_mut(start,len);
+		return self.get_page_slice_mut(start,len);
 	}
 	
 }
