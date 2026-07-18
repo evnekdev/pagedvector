@@ -26,6 +26,8 @@ jobs:
 
       - name: Check feature configurations
         run: |
+          cargo check
+          cargo check --all-features
           cargo check --no-default-features
           cargo check --features serde
           cargo check --features bincode
@@ -35,6 +37,9 @@ jobs:
 
       - name: Test all features
         run: cargo test --all-features
+
+      - name: Test default features
+        run: cargo test
 
       - name: Test without default features
         run: cargo test --no-default-features
