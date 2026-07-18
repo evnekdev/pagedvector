@@ -114,6 +114,8 @@ where
 
 #[cfg(all(test, feature = "bincode"))]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     #[derive(serde::Serialize)]
