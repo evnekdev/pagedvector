@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
   indexing design. Safe APIs no longer expose mutable references into page
   storage.
 - Changed `get(index)` from a panicking `&T` return to `Option<&T>`.
+- Changed `is_default(index)` from a panicking `bool` return to `Option<bool>`.
 - Changed `set(index, value)` to return `Result<(), IndexOutOfBounds>` and
   added `reset(index)` plus controlled, panic-safe `update(index, closure)`.
 - Renamed `number_pages_total` to `page_count` and `number_pages_alloc` to
