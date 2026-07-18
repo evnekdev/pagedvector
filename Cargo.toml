@@ -1,24 +1,28 @@
 [package]
-description = "A sparse paged vector with lazy page allocation."
+description = "A sparse paged vector with lazy default-value allocation."
 authors = ["Evgenii Nekhoroshev evgnekhoroshev@gmail.com"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/evnekdev/pagedvector"
 homepage = "https://github.com/evnekdev/pagedvector"
+documentation = "https://docs.rs/pagedvector"
 name = "pagedvector"
 version = "0.2.0"
 edition = "2021"
+rust-version = "1.85"
 readme = "README.md"
 keywords = ["vector", "sparse", "paged", "memory", "storage"]
 categories = ["data-structures"]
+exclude = ["tests/no_std_consumer/**"]
 
 [features]
-default = []
-serde = ["dep:serde"]
-bincode = ["serde", "dep:bincode"]
+default = ["std"]
+std = ["serde?/std", "bincode?/std"]
+serde = ["dep:serde", "serde/alloc"]
+bincode = ["serde", "dep:bincode", "bincode/alloc"]
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"], optional = true }
-bincode = { version = "2.0", features = ["serde", "alloc"], optional = true }
+serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+bincode = { version = "2.0", default-features = false, features = ["serde"], optional = true }
 
 [dev-dependencies]
 proptest = "1"

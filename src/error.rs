@@ -1,7 +1,8 @@
-use std::error::Error;
-use std::fmt;
+use core::fmt;
 
 /// An attempted logical index was outside a [`crate::PagedVec`].
+///
+/// Implements [`std::error::Error`] when the default `std` feature is enabled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndexOutOfBounds {
     /// The attempted index.
@@ -20,9 +21,12 @@ impl fmt::Display for IndexOutOfBounds {
     }
 }
 
-impl Error for IndexOutOfBounds {}
+#[cfg(feature = "std")]
+impl std::error::Error for IndexOutOfBounds {}
 
 /// Construction errors for [`crate::PagedVec`].
+///
+/// Implements [`std::error::Error`] when the default `std` feature is enabled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PagedVecError {
     /// Pages must contain at least one logical element.
@@ -37,4 +41,5 @@ impl fmt::Display for PagedVecError {
     }
 }
 
-impl Error for PagedVecError {}
+#[cfg(feature = "std")]
+impl std::error::Error for PagedVecError {}
