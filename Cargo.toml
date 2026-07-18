@@ -12,7 +12,17 @@ rust-version = "1.85"
 readme = "README.md"
 keywords = ["vector", "sparse", "paged", "memory", "storage"]
 categories = ["data-structures"]
-exclude = ["tests/no_std_consumer/**"]
+include = [
+    "src/**",
+    "tests/dynamic.rs",
+    "tests/read_only.rs",
+    "tests/serialization.rs",
+    "examples/basic_sparse.rs",
+    "Cargo.toml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
 
 [features]
 default = ["std"]
