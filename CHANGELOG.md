@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.2.0 — Unreleased
 
 ### Added
 
@@ -15,8 +15,6 @@ All notable changes to this project are documented here.
 - `contains` plus documentation of equality's logical/default-based contract.
 - Property-based dense-model tests, public integration tests, and broader
   deserialization validation coverage.
-
-## 0.2.0 — Unreleased
 
 ### Breaking changes
 
