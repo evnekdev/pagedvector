@@ -29,6 +29,38 @@ performance investigation, not a property of this release.
 `PagedVec` is non-contiguous. It intentionally does not implement range slices,
 `Deref<Target = [T]>`, `AsRef<[T]>`, or `Borrow<[T]>`.
 
+## `no_std` and allocation
+
+The default feature set enables `std`. The core library also supports
+`no_std + alloc` when default features are disabled:
+
+```toml
+[dependencies]
+pagedvector = { version = "0.2", default-features = false }
+```
+
+The final application supplies the global allocator and, where needed, its
+panic handler. `PagedVec` cannot work in allocator-free `core`-only programs:
+it owns a dense page table and page storage. Disabling `std` does not make that
+metadata bounded; the page table remains proportional to
+`ceil(len / page_size)`.
+
+Serialization also works without `std` when its corresponding feature is
+enabled:
+
+```toml
+[dependencies]
+pagedvector = { version = "0.2", default-features = false, features = ["serde"] }
+# Or: features = ["bincode"]
+```
+
+The crate's feature graph is intentionally small:
+
+- `std` (default) enables standard-library integration, including
+  `std::error::Error` implementations and optional dependency `std` support;
+- `serde` enables Serde with `alloc` support;
+- `bincode` enables Serde plus bincode's `alloc` support.
+
 ## Safe core API
 
 ```rust
@@ -136,6 +168,11 @@ guarantee for clone panics: the vector is unchanged. `push` first grows the
 logical extent and then stores the new value, so a later panic while storing
 that value can leave a canonical, newly appended default-valued slot.
 
+`clear`, `reset_all`, and `truncate` commit their new canonical metadata before
+dropping detached page storage. A panic from `T::Drop` can therefore propagate,
+but does not restore stale pages or counters. `Extend<T>` is repeated `push`,
+so iteration or element panics can leave the already appended prefix present.
+
 ```rust
 use pagedvector::PagedVec;
 
@@ -214,9 +251,9 @@ specific release date.
    correct final-page sizing, tests, CI. Implemented.
 2. **Read-only ergonomics** — iteration, non-default iteration, allocated-page
    iteration, `contains`, materialization, and logical equality documentation.
-   Implemented in the current unreleased work.
+   Implemented.
 3. **Dynamic length** — `push`, `pop`, `resize`, `truncate`, `clear`,
-   `reset_all`, and `extend`. Implemented in the current unreleased work.
+   `reset_all`, and `extend`. Implemented.
 4. **Controlled mutation** — richer closure updates, an entry API, mutation
    guards, and transformations, only where bookkeeping remains reliable.
 5. **Serialization stability** — compatibility policy, versioned format tests,
@@ -234,19 +271,26 @@ CI runs on stable Rust and executes:
 ```text
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo check
+cargo check --all-features
 cargo check --no-default-features
+cargo check --no-default-features --features serde
+cargo check --no-default-features --features bincode
 cargo check --features serde
 cargo check --features bincode
+cargo check --examples --all-features
 cargo test --all-features
 cargo test --no-default-features
 cargo test --features serde
 cargo test --features bincode
+cargo test --doc --all-features
 cargo doc --no-deps --all-features
 cargo package
 ```
 
-An MSRV has not yet been declared; stable Rust is the supported toolchain until
-the project establishes and continuously tests one.
+The MSRV is Rust 1.85. CI checks the no-default-feature library and test suite
+on that toolchain, while stable CI additionally checks `no_std + alloc` on the
+host and `thumbv7em-none-eabi` target.
 
 ## License
 
