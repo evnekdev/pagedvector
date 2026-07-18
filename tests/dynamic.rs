@@ -83,3 +83,19 @@ fn truncate_and_resize_observe_page_boundaries() {
     assert_eq!(values.allocated_page(0), Some(&[5, 1, 5, 5][..]));
     assert_eq!(values.allocated_page(1), None);
 }
+
+#[test]
+fn equality_ignores_dynamic_allocation_history() {
+    let mut clear_and_regrow = PagedVec::new(0, 0_i32, 2);
+    clear_and_regrow.extend([1, 0, 2]);
+    clear_and_regrow.clear();
+    clear_and_regrow.extend([0, 3, 0, 4]);
+
+    let expected = PagedVec::from_vec(vec![0, 3, 0, 4], 0_i32, 4).unwrap();
+    assert_eq!(clear_and_regrow, expected);
+
+    let mut truncate_and_regrow = PagedVec::from_vec(vec![0, 3, 0, 4, 5], 0_i32, 2).unwrap();
+    truncate_and_regrow.truncate(2);
+    truncate_and_regrow.extend([0, 4]);
+    assert_eq!(truncate_and_regrow, expected);
+}

@@ -19,6 +19,23 @@ fn construction_and_public_errors_are_explicit() {
     ));
 }
 
+#[cfg(feature = "std")]
+#[test]
+fn public_errors_have_stable_display_and_standard_error_support() {
+    fn assert_error<T: std::error::Error>() {}
+
+    assert_error::<IndexOutOfBounds>();
+    assert_error::<PagedVecError>();
+    assert_eq!(
+        IndexOutOfBounds { index: 3, len: 2 }.to_string(),
+        "index 3 is out of bounds for PagedVec of length 2"
+    );
+    assert_eq!(
+        PagedVecError::ZeroPageSize.to_string(),
+        "page size must be greater than zero"
+    );
+}
+
 #[test]
 fn logical_iteration_and_borrowed_into_iterator_include_default_slots() {
     let mut values = PagedVec::new(5, 9_i32, 2);
