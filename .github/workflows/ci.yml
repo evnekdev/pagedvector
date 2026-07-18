@@ -30,6 +30,9 @@ jobs:
           cargo check --features serde
           cargo check --features bincode
 
+      - name: Check examples
+        run: cargo check --examples --all-features
+
       - name: Test all features
         run: cargo test --all-features
 
@@ -47,3 +50,56 @@ jobs:
 
       - name: Package crate
         run: cargo package
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust 1.85
+        uses: dtolnay/rust-toolchain@1.85.0
+
+      - name: Check without default features
+        run: cargo check --no-default-features
+
+      - name: Test without default features
+        run: cargo test --no-default-features
+
+  no-std:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust and embedded target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabi
+
+      - name: Check no_std plus alloc on host
+        run: cargo check --no-default-features
+
+      - name: Check no_std plus alloc with serde
+        run: cargo check --no-default-features --features serde
+
+      - name: Check no_std plus alloc with bincode
+        run: cargo check --no-default-features --features bincode
+
+      - name: Check embedded target
+        run: cargo check --target thumbv7em-none-eabi --no-default-features
+
+      - name: Check embedded target with serde
+        run: cargo check --target thumbv7em-none-eabi --no-default-features --features serde
+
+      - name: Check embedded target with bincode
+        run: cargo check --target thumbv7em-none-eabi --no-default-features --features bincode
+
+      - name: Check no_std consumer
+        run: cargo check --manifest-path tests/no_std_consumer/Cargo.toml
+
+      - name: Check no_std serde consumer
+        run: cargo check --manifest-path tests/no_std_consumer/Cargo.toml --features serde
+
+      - name: Check no_std bincode consumer
+        run: cargo check --manifest-path tests/no_std_consumer/Cargo.toml --features bincode

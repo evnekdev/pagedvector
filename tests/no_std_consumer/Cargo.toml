@@ -1,0 +1,14 @@
+[package]
+name = "pagedvector-no-std-check"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+serde = ["pagedvector/serde", "dep:serde"]
+bincode = ["pagedvector/bincode", "dep:bincode"]
+
+[dependencies]
+pagedvector = { path = "../..", default-features = false }
+serde = { version = "1.0", default-features = false, optional = true }
+bincode = { version = "2.0", default-features = false, features = ["serde", "alloc"], optional = true }
