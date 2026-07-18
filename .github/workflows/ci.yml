@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint all features
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test all features
+        run: cargo test --all-features
+
+      - name: Test without default features
+        run: cargo test --no-default-features
+
+      - name: Build public documentation
+        run: cargo doc --no-deps --all-features
+
+      - name: Package crate
+        run: cargo package
