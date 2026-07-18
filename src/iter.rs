@@ -1,5 +1,5 @@
-use std::iter::FusedIterator;
-use std::slice;
+use core::iter::FusedIterator;
+use core::slice;
 
 use crate::page::Page;
 use crate::paged_vec::PagedVec;
@@ -134,7 +134,7 @@ impl<T: PartialEq> FusedIterator for NonDefaultIter<'_, T> {}
 /// whereas non-defaultness is per logical value.
 #[derive(Clone, Debug)]
 pub struct AllocatedPages<'a, T> {
-    pages: std::iter::Enumerate<slice::Iter<'a, Option<Page<T>>>>,
+    pages: core::iter::Enumerate<slice::Iter<'a, Option<Page<T>>>>,
 }
 
 impl<'a, T> AllocatedPages<'a, T> {
@@ -155,6 +155,10 @@ impl<'a, T> Iterator for AllocatedPages<'a, T> {
             }
         }
         None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.pages.len()))
     }
 }
 
@@ -190,6 +194,10 @@ impl<'a, T> Iterator for AllocatedPageIndices<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.pages.next().map(|(page_index, _)| page_index)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.pages.size_hint()
     }
 }
 

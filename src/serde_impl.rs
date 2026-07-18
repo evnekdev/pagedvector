@@ -60,7 +60,7 @@ where
             ));
         }
 
-        let page_size = std::num::NonZeroUsize::new(repr.page_size)
+        let page_size = NonZeroUsize::new(repr.page_size)
             .ok_or_else(|| D::Error::custom("PagedVec page size must be greater than zero"))?;
         let expected_page_count = page_count_for(repr.len, page_size);
         if repr.pages.len() != expected_page_count {
@@ -251,3 +251,5 @@ mod tests {
         assert_eq!(decoded.validate_invariants(), Ok(()));
     }
 }
+use alloc::vec::Vec;
+use core::num::NonZeroUsize;

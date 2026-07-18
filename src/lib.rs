@@ -1,4 +1,6 @@
 #![forbid(unsafe_code)]
+#![cfg_attr(not(feature = "std"), no_std)]
+
 //! A vector whose logical contents use lazily allocated fixed-size pages.
 //!
 //! [`PagedVec`] has a logical value at every index below [`PagedVec::len`], but
@@ -29,6 +31,35 @@
 //! `ceil(len / page_size)`. It is therefore best suited to workloads where
 //! page data dominates page-table overhead; it does not use constant memory
 //! for an enormous logical length.
+//!
+//! # `no_std` support
+//!
+//! The ordinary build enables `std`:
+//!
+//! ```toml
+//! [dependencies]
+//! pagedvector = "0.2"
+//! ```
+//!
+//! `PagedVec` also supports `no_std` environments with the [`alloc`] crate:
+//!
+//! ```toml
+//! [dependencies]
+//! pagedvector = { version = "0.2", default-features = false }
+//! ```
+//!
+//! Enable `serde` without `std` with:
+//!
+//! ```toml
+//! [dependencies]
+//! pagedvector = { version = "0.2", default-features = false, features = ["serde"] }
+//! ```
+//!
+//! The `bincode` feature is also available without `std`. The final application
+//! must provide a compatible global allocator and, where applicable, a panic
+//! handler. `PagedVec` cannot support allocator-free `core`-only targets
+//! because it owns a page table and page storage. `no_std + alloc` does not
+//! change the dense page table's proportional metadata cost.
 //!
 //! # Example
 //!
@@ -82,6 +113,11 @@
 //! values.reset_all(); // keeps four logical default-valued slots
 //! values.clear();     // removes every logical slot
 //! ```
+
+extern crate alloc;
+
+#[cfg(all(test, not(feature = "std")))]
+extern crate std;
 
 mod error;
 mod iter;
