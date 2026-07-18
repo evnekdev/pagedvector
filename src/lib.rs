@@ -12,6 +12,12 @@
 //! required to reclaim default-only pages. Use [`PagedVec::set`],
 //! [`PagedVec::reset`], or [`PagedVec::update`] for mutation.
 //!
+//! [`PagedVec::iter`] visits every logical value, including defaults supplied
+//! by unallocated pages. [`PagedVec::non_default_iter`] visits only logical
+//! values that differ from the default, while [`PagedVec::allocated_pages`]
+//! visits only physical page storage. These are deliberately different views:
+//! an allocated page can contain default-valued slots.
+//!
 //! The current backend uses a dense `Vec<Option<Page<T>>>` page table. Page
 //! data is allocated lazily, but page-table metadata is proportional to
 //! `ceil(len / page_size)`. It is therefore best suited to workloads where
@@ -34,8 +40,29 @@
 //! values.reset(42).unwrap();
 //! assert_eq!(values.allocated_page_count(), 0);
 //! ```
+//!
+//! # Read-only views
+//!
+//! ```
+//! use pagedvector::PagedVec;
+//!
+//! let values = PagedVec::from_vec(vec![0, 5, 0, 7, 0], 0, 4)?;
+//!
+//! assert_eq!(values.iter().copied().collect::<Vec<_>>(), vec![0, 5, 0, 7, 0]);
+//! assert_eq!(
+//!     values
+//!         .non_default_iter()
+//!         .map(|(index, value)| (index, *value))
+//!         .collect::<Vec<_>>(),
+//!     vec![(1, 5), (3, 7)],
+//! );
+//! assert_eq!(values.allocated_pages().count(), 1);
+//! assert_eq!(values.to_vec(), vec![0, 5, 0, 7, 0]);
+//! # Ok::<(), pagedvector::PagedVecError>(())
+//! ```
 
 mod error;
+mod iter;
 mod page;
 mod paged_vec;
 
@@ -43,4 +70,5 @@ mod paged_vec;
 mod serde_impl;
 
 pub use crate::error::{IndexOutOfBounds, PagedVecError};
+pub use crate::iter::{AllocatedPageIndices, AllocatedPages, Iter, NonDefaultIter};
 pub use crate::paged_vec::PagedVec;
