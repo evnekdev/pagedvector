@@ -2,6 +2,7 @@ use std::num::NonZeroUsize;
 use std::ops::Index;
 
 use crate::error::{IndexOutOfBounds, PagedVecError};
+use crate::iter::{AllocatedPageIndices, AllocatedPages, Iter, NonDefaultIter};
 use crate::page::Page;
 
 /// A fixed-length vector whose physical storage is allocated one page at a
@@ -11,6 +12,16 @@ use crate::page::Page;
 /// allocated, that value is [`Self::default_value`]. Allocated pages are
 /// canonical: each has at least one non-default value, and their bookkeeping
 /// exactly matches their contents.
+///
+/// # Logical values, non-default values, and allocated pages
+///
+/// A logical value exists at every index below [`Self::len`]. A non-default
+/// value is a logical value unequal to [`Self::default_value`]. An allocated
+/// page is physical storage containing at least one non-default value, but it
+/// may also contain default-valued slots. These concepts are intentionally
+/// distinct: [`Self::iter`] visits logical values, [`Self::non_default_iter`]
+/// visits non-default values, and [`Self::allocated_pages`] visits physical
+/// storage.
 ///
 /// Common operations are O(1), apart from page allocation and cloning the
 /// default value into a newly allocated page. [`Self::allocated_page_count`]
@@ -96,6 +107,25 @@ impl<T> PagedVec<T> {
         self.pages.iter().filter(|page| page.is_some()).count()
     }
 
+    /// Returns whether `page_index` has physical storage.
+    ///
+    /// Returns `None` when `page_index` is outside the logical page table.
+    #[must_use]
+    pub fn is_page_allocated(&self, page_index: usize) -> Option<bool> {
+        self.pages.get(page_index).map(Option::is_some)
+    }
+
+    /// Returns whether the page containing `index` has physical storage.
+    ///
+    /// Returns `None` when `index` is outside the logical vector. `Some(true)`
+    /// does not mean the value at this exact index is non-default: an allocated
+    /// page can contain default-valued slots.
+    #[must_use]
+    pub fn is_allocated(&self, index: usize) -> Option<bool> {
+        self.page_index(index)
+            .and_then(|page_index| self.is_page_allocated(page_index))
+    }
+
     /// Returns the page index containing `index`, or `None` when `index` is
     /// outside the logical vector.
     #[must_use]
@@ -123,6 +153,15 @@ impl<T> PagedVec<T> {
         })
     }
 
+    /// Returns an iterator over all logical values in index order.
+    ///
+    /// Values in unallocated pages borrow the configured default value. The
+    /// iterator does not materialize a dense temporary vector.
+    #[must_use]
+    pub fn iter(&self) -> Iter<'_, T> {
+        Iter::new(self)
+    }
+
     /// Returns concrete physical storage for an allocated page.
     ///
     /// `None` means that `page_index` is either outside the page table or that
@@ -134,6 +173,43 @@ impl<T> PagedVec<T> {
             .get(page_index)
             .and_then(Option::as_ref)
             .map(|page| page.values.as_ref())
+    }
+
+    /// Returns an iterator over physically allocated pages in ascending order.
+    ///
+    /// Each slice contains complete page storage and can include values equal
+    /// to the configured default. Use [`Self::non_default_iter`] when logical
+    /// non-default values are required instead.
+    #[must_use]
+    pub fn allocated_pages(&self) -> AllocatedPages<'_, T> {
+        AllocatedPages::new(self)
+    }
+
+    /// Returns an iterator over indices of physically allocated pages in
+    /// ascending order.
+    #[must_use]
+    pub fn allocated_page_indices(&self) -> AllocatedPageIndices<'_, T> {
+        AllocatedPageIndices::new(self)
+    }
+
+    /// Materializes all logical values in index order.
+    #[must_use]
+    pub fn to_vec(&self) -> Vec<T>
+    where
+        T: Clone,
+    {
+        self.iter().cloned().collect()
+    }
+
+    /// Consumes the vector and materializes all logical values in index order.
+    ///
+    /// Unallocated slots are represented by cloned default values.
+    #[must_use]
+    pub fn into_vec(self) -> Vec<T>
+    where
+        T: Clone,
+    {
+        self.iter().cloned().collect()
     }
 
     fn split_index(&self, index: usize) -> Option<(usize, usize)> {
@@ -158,6 +234,54 @@ impl<T: PartialEq> PagedVec<T> {
     #[must_use]
     pub fn is_default(&self, index: usize) -> Option<bool> {
         self.get(index).map(|value| value == &self.default)
+    }
+
+    /// Returns an iterator over `(index, value)` pairs whose values differ from
+    /// the configured default.
+    ///
+    /// Unallocated pages are skipped without inspecting synthetic default
+    /// values. The iterator's exact length is [`Self::non_default_len`].
+    #[must_use]
+    pub fn non_default_iter(&self) -> NonDefaultIter<'_, T> {
+        NonDefaultIter::new(self)
+    }
+
+    /// Returns whether any logical value equals `value`.
+    #[must_use]
+    pub fn contains(&self, value: &T) -> bool {
+        self.iter().any(|candidate| candidate == value)
+    }
+
+    /// Builds a paged vector from dense logical values.
+    ///
+    /// Pages containing only values equal to `default` are not allocated. The
+    /// resulting vector is canonical, including a shorter final page when the
+    /// input length is not divisible by `page_size`.
+    pub fn from_vec(values: Vec<T>, default: T, page_size: usize) -> Result<Self, PagedVecError> {
+        let mut vector = Self::try_new(values.len(), default, page_size)?;
+        let mut values = values.into_iter();
+
+        for page_index in 0..vector.page_count() {
+            let page_len = vector
+                .logical_page_len(page_index)
+                .expect("page index from page table must be valid");
+            let page_values = values.by_ref().take(page_len).collect::<Vec<_>>();
+            let page_non_default = page_values
+                .iter()
+                .filter(|value| *value != &vector.default)
+                .count();
+
+            if page_non_default != 0 {
+                vector.pages[page_index] = Some(Page {
+                    values: page_values.into_boxed_slice(),
+                    non_default: page_non_default,
+                });
+                vector.non_default += page_non_default;
+            }
+        }
+
+        vector.debug_assert_invariants();
+        Ok(vector)
     }
 
     pub(crate) fn validate_invariants(&self) -> Result<(), &'static str> {
@@ -302,6 +426,11 @@ impl<T> Index<usize> for PagedVec<T> {
     }
 }
 
+/// Equality compares logical length, configured default value, and every
+/// logical value. It deliberately ignores page size and physical allocation
+/// layout, so equivalent logical contents can compare equal across different
+/// page layouts. Different configured defaults compare unequal even when all
+/// current logical values match.
 impl<T: PartialEq> PartialEq for PagedVec<T> {
     fn eq(&self, other: &Self) -> bool {
         self.len == other.len
@@ -311,6 +440,15 @@ impl<T: PartialEq> PartialEq for PagedVec<T> {
 }
 
 impl<T: Eq> Eq for PagedVec<T> {}
+
+impl<'a, T> IntoIterator for &'a PagedVec<T> {
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
 
 pub(crate) fn page_count_for(len: usize, page_size: NonZeroUsize) -> usize {
     let full_pages = len / page_size.get();
@@ -345,31 +483,58 @@ pub(crate) fn logical_page_len_for(
 
 #[cfg(test)]
 mod tests {
+    use std::iter::FusedIterator;
     use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    use proptest::prelude::*;
 
     use super::*;
 
     fn assert_matches(paged: &PagedVec<i32>, model: &[i32], default: i32) {
         assert_eq!(paged.len(), model.len());
-        assert_eq!(
-            (0..paged.len())
-                .map(|index| *paged.get(index).unwrap())
-                .collect::<Vec<_>>(),
-            model
-        );
+        assert_eq!(paged.to_vec(), model);
+        assert_eq!(paged.iter().copied().collect::<Vec<_>>(), model);
         assert_eq!(
             paged.non_default_len(),
             model.iter().filter(|value| **value != default).count()
         );
 
-        let expected_allocated_pages = (0..paged.page_count())
+        let expected_non_default = model
+            .iter()
+            .enumerate()
+            .filter(|(_, value)| **value != default)
+            .map(|(index, value)| (index, *value))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            paged
+                .non_default_iter()
+                .map(|(index, value)| (index, *value))
+                .collect::<Vec<_>>(),
+            expected_non_default
+        );
+
+        let expected_allocated_page_indices = (0..paged.page_count())
             .filter(|page_index| {
                 let start = page_index * paged.page_size();
                 let end = (start + paged.page_size()).min(model.len());
                 model[start..end].iter().any(|value| *value != default)
             })
-            .count();
-        assert_eq!(paged.allocated_page_count(), expected_allocated_pages);
+            .collect::<Vec<_>>();
+        assert_eq!(
+            paged.allocated_page_count(),
+            expected_allocated_page_indices.len()
+        );
+        assert_eq!(
+            paged.allocated_page_indices().collect::<Vec<_>>(),
+            expected_allocated_page_indices
+        );
+        assert_eq!(
+            paged
+                .allocated_pages()
+                .map(|(page_index, _)| page_index)
+                .collect::<Vec<_>>(),
+            expected_allocated_page_indices
+        );
         assert_eq!(paged.validate_invariants(), Ok(()));
     }
 
@@ -546,8 +711,91 @@ mod tests {
         assert_eq!(small_pages, large_pages);
         assert_eq!(small_pages.clone(), small_pages);
 
-        let different_default = PagedVec::new(5, 1_i32, 4);
+        let mut different_default = PagedVec::new(5, 1_i32, 4);
+        for index in 0..5 {
+            different_default
+                .set(index, if index == 4 { 9 } else { 0 })
+                .unwrap();
+        }
+        assert_eq!(small_pages.to_vec(), different_default.to_vec());
         assert_ne!(small_pages, different_default);
+
+        let mut changed_history = PagedVec::new(5, 0_i32, 2);
+        changed_history.set(1, 8).unwrap();
+        changed_history.reset(1).unwrap();
+        let untouched = PagedVec::new(5, 0_i32, 2);
+        assert_eq!(changed_history, untouched);
+        assert_eq!(changed_history.allocated_page_count(), 0);
+    }
+
+    #[test]
+    fn iterators_cover_logical_sparse_and_allocated_views() {
+        fn assert_logical_traits<
+            I: Iterator + DoubleEndedIterator + ExactSizeIterator + FusedIterator,
+        >() {
+        }
+        fn assert_sparse_traits<I: Iterator + ExactSizeIterator + FusedIterator>() {}
+        fn assert_allocated_traits<I: Iterator + DoubleEndedIterator + FusedIterator>() {}
+
+        assert_logical_traits::<Iter<'_, i32>>();
+        assert_sparse_traits::<NonDefaultIter<'_, i32>>();
+        assert_allocated_traits::<AllocatedPages<'_, i32>>();
+        assert_allocated_traits::<AllocatedPageIndices<'_, i32>>();
+
+        let mut paged = PagedVec::new(6, 0_i32, 4);
+        paged.set(1, 2).unwrap();
+        paged.set(4, 3).unwrap();
+
+        let mut logical = paged.iter();
+        assert_eq!(logical.len(), 6);
+        assert_eq!(logical.next(), Some(&0));
+        assert_eq!(logical.next_back(), Some(&0));
+        assert_eq!(logical.len(), 4);
+        assert_eq!(logical.copied().collect::<Vec<_>>(), vec![2, 0, 0, 3]);
+
+        assert_eq!(
+            (&paged).into_iter().copied().collect::<Vec<_>>(),
+            vec![0, 2, 0, 0, 3, 0]
+        );
+        assert_eq!(
+            paged
+                .non_default_iter()
+                .map(|(index, value)| (index, *value))
+                .collect::<Vec<_>>(),
+            vec![(1, 2), (4, 3)]
+        );
+        assert_eq!(
+            paged
+                .allocated_pages()
+                .map(|(index, values)| (index, values.to_vec()))
+                .collect::<Vec<_>>(),
+            vec![(0, vec![0, 2, 0, 0]), (1, vec![3, 0])]
+        );
+        assert_eq!(
+            paged.allocated_page_indices().collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+    }
+
+    #[test]
+    fn conversions_and_allocation_inspection_remain_canonical() {
+        let paged = PagedVec::from_vec(vec![0, 1, 0, 2, 0], 0_i32, 4).unwrap();
+        assert_eq!(paged.to_vec(), vec![0, 1, 0, 2, 0]);
+        assert_eq!(paged.non_default_len(), 2);
+        assert_eq!(paged.allocated_page_indices().collect::<Vec<_>>(), vec![0]);
+        assert_eq!(paged.allocated_page(0), Some(&[0, 1, 0, 2][..]));
+        assert_eq!(paged.allocated_page(1), None);
+        assert_eq!(paged.is_page_allocated(0), Some(true));
+        assert_eq!(paged.is_page_allocated(1), Some(false));
+        assert_eq!(paged.is_page_allocated(2), None);
+        assert_eq!(paged.is_allocated(0), Some(true));
+        assert_eq!(paged.is_allocated(4), Some(false));
+        assert_eq!(paged.is_allocated(5), None);
+        assert!(paged.contains(&0));
+        assert!(paged.contains(&2));
+        assert!(!paged.contains(&9));
+        assert_eq!(paged.clone().into_vec(), vec![0, 1, 0, 2, 0]);
+        assert_eq!(paged.validate_invariants(), Ok(()));
     }
 
     #[test]
@@ -576,6 +824,61 @@ mod tests {
                     model[index] = value;
                 }
                 assert_matches(&paged, &model, DEFAULT);
+            }
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        #[test]
+        fn generated_set_and_reset_operations_match_a_dense_model(
+            len in 0_usize..=48,
+            page_size in 1_usize..=16,
+            default in any::<i32>(),
+            operations in prop::collection::vec((any::<bool>(), any::<usize>(), any::<i32>()), 0..96),
+        ) {
+            let mut paged = PagedVec::new(len, default, page_size);
+            let mut model = vec![default; len];
+
+            if len == 0 {
+                prop_assert_eq!(paged.to_vec(), model.clone());
+                prop_assert_eq!(paged.iter().copied().collect::<Vec<_>>(), model);
+                prop_assert_eq!(paged.non_default_iter().count(), 0);
+                prop_assert_eq!(paged.validate_invariants(), Ok(()));
+                return Ok(());
+            }
+
+            for (reset, raw_index, value) in operations {
+                let index = raw_index % len;
+                if reset {
+                    paged.reset(index).unwrap();
+                    model[index] = default;
+                } else {
+                    paged.set(index, value).unwrap();
+                    model[index] = value;
+                }
+
+                let expected_non_default = model
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, value)| **value != default)
+                    .map(|(index, value)| (index, *value))
+                    .collect::<Vec<_>>();
+                prop_assert_eq!(paged.to_vec(), model.clone());
+                prop_assert_eq!(paged.iter().copied().collect::<Vec<_>>(), model.clone());
+                prop_assert_eq!(
+                    paged.non_default_len(),
+                    model.iter().filter(|value| **value != default).count()
+                );
+                prop_assert_eq!(
+                    paged
+                        .non_default_iter()
+                        .map(|(index, value)| (index, *value))
+                        .collect::<Vec<_>>(),
+                    expected_non_default
+                );
+                prop_assert_eq!(paged.validate_invariants(), Ok(()));
             }
         }
     }
