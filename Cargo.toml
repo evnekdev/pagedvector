@@ -1,6 +1,6 @@
 [package]
 description = "A sparse paged vector with lazy default-value allocation."
-authors = ["Evgenii Nekhoroshev evgnekhoroshev@gmail.com"]
+authors = ["Evgenii Nekhoroshev <evgnekhoroshev@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/evnekdev/pagedvector"
 homepage = "https://github.com/evnekdev/pagedvector"
