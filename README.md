@@ -4,10 +4,10 @@
 physical storage is split into fixed-size pages. A page is allocated only after
 one of its values differs from a configured default value.
 
-The crate is currently preparing its `0.2.0` invariant-safe core. It is useful
-when page data dominates metadata and most logical values have a common
-default. It is not a drop-in `Vec<T>` replacement and does not claim to use
-constant memory for a very large logical length.
+The crate has an invariant-safe core and read-only collection ergonomics. It
+is useful when page data dominates metadata and most logical values have a
+common default. It is not a drop-in `Vec<T>` replacement and does not claim to
+use constant memory for a very large logical length.
 
 ## Storage model
 
@@ -66,6 +66,51 @@ The most relevant inspection methods are `page_size`, `page_count`,
 physical storage; it does not manufacture a default-filled slice for an
 unallocated page.
 
+## Read-only collection ergonomics
+
+`PagedVec` exposes three intentionally different read-only views:
+
+1. **Logical values** exist at every in-bounds index. `iter` (and
+   `IntoIterator for &PagedVec`) visits all of them.
+2. **Non-default values** are the logical values unequal to `default_value`.
+   `non_default_iter` yields their index and reference.
+3. **Allocated pages** are concrete physical storage. `allocated_pages` and
+   `allocated_page_indices` visit only those pages. An allocated page can still
+   contain some default-valued slots.
+
+```rust
+use pagedvector::PagedVec;
+
+let values = PagedVec::from_vec(vec![0, 5, 0, 7, 0], 0, 4)?;
+
+assert_eq!(values.iter().copied().collect::<Vec<_>>(), vec![0, 5, 0, 7, 0]);
+assert_eq!(
+    values
+        .non_default_iter()
+        .map(|(index, value)| (index, *value))
+        .collect::<Vec<_>>(),
+    vec![(1, 5), (3, 7)],
+);
+assert_eq!(
+    values
+        .allocated_pages()
+        .map(|(index, page)| (index, page.to_vec()))
+        .collect::<Vec<_>>(),
+    vec![(0, vec![0, 5, 0, 7])],
+);
+assert_eq!(values.to_vec(), vec![0, 5, 0, 7, 0]);
+# Ok::<(), pagedvector::PagedVecError>(())
+```
+
+`is_page_allocated(page_index)` distinguishes an invalid page index from a
+valid but unallocated page. `is_allocated(index)` does the same for logical
+indices, but `Some(true)` only says the containing page is physical—it does
+not mean the exact value is non-default.
+
+`from_vec` accepts explicit default and page-size policies, and `to_vec` /
+`into_vec` materialize the logical sequence. The materialization methods clone
+values because unallocated slots share one configured default value.
+
 ## Invariants
 
 The implementation maintains these canonical rules after every safe mutation:
@@ -103,6 +148,12 @@ validates page sizes, page count, and page lengths; it recounts values and
 normalizes default-only pages. The representation is not yet a stable wire
 format.
 
+Equality compares logical length, the configured default, and every logical
+value. It ignores page size and physical allocation layout; therefore vectors
+with matching logical contents can compare equal with different page sizes.
+Vectors with different configured defaults compare unequal even if all current
+logical values match.
+
 ## 0.2 breaking changes
 
 This release removes `get_mut`, `get_page_slice_mut`, `IndexMut`, and all
@@ -116,9 +167,10 @@ The roadmap is staged deliberately; none of these items are promises of a
 specific release date.
 
 1. **Invariant-safe core** — safe access, set/reset, canonical counters,
-   correct final-page sizing, tests, CI. This is the current milestone.
+   correct final-page sizing, tests, CI. Implemented.
 2. **Read-only ergonomics** — iteration, non-default iteration, allocated-page
-   iteration, `contains`, materialization, and logical equality refinements.
+   iteration, `contains`, materialization, and logical equality documentation.
+   Implemented in the current unreleased work.
 3. **Dynamic length** — `push`, `pop`, `resize`, `truncate`, `clear`,
    `reset_all`, and `extend`.
 4. **Controlled mutation** — richer closure updates, an entry API, mutation

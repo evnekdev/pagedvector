@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- Immutable logical iteration through `iter` and `IntoIterator for &PagedVec`.
+- Sparse `non_default_iter`, physical `allocated_pages`, and
+  `allocated_page_indices` iterators.
+- `is_page_allocated` and `is_allocated` for explicit physical-allocation
+  inspection.
+- `to_vec`, `into_vec`, and explicit-policy `from_vec` conversion methods.
+- `contains` plus documentation of equality's logical/default-based contract.
+- Property-based dense-model tests, public integration tests, and broader
+  deserialization validation coverage.
+
 ## 0.2.0 — Unreleased
 
 ### Breaking changes
