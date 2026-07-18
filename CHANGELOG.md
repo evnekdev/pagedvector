@@ -49,6 +49,8 @@ All notable changes to this project are documented here.
   recounts non-default values, and discards default-only pages.
 - Dynamic operations commit canonical metadata before detached storage is
   dropped, preserving canonical state if a destructor panics.
+- The distributed `LICENSE` now contains both the MIT and Apache-2.0 terms
+  declared by the package metadata.
 
 ### Removed
 
