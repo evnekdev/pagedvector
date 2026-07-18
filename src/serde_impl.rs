@@ -112,11 +112,28 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "bincode"))]
 mod tests {
     use super::*;
 
-    #[cfg(feature = "bincode")]
+    #[derive(serde::Serialize)]
+    struct RawRepr {
+        version: u8,
+        len: usize,
+        page_size: usize,
+        default: i32,
+        pages: Vec<Option<Vec<i32>>>,
+    }
+
+    fn assert_rejected(raw: RawRepr) {
+        let encoded = bincode::serde::encode_to_vec(&raw, bincode::config::standard()).unwrap();
+        let decoded = bincode::serde::decode_from_slice::<PagedVec<i32>, _>(
+            &encoded,
+            bincode::config::standard(),
+        );
+        assert!(decoded.is_err());
+    }
+
     #[test]
     fn bincode_round_trip_recounts_and_preserves_values() {
         let mut original = PagedVec::new(5, 0_i32, 4);
@@ -135,32 +152,69 @@ mod tests {
         assert_eq!(decoded.validate_invariants(), Ok(()));
     }
 
-    #[cfg(feature = "bincode")]
     #[test]
-    fn deserialization_rejects_invalid_structure_and_normalizes_default_pages() {
-        #[derive(serde::Serialize)]
-        struct RawRepr {
-            version: u8,
-            len: usize,
-            page_size: usize,
-            default: i32,
-            pages: Vec<Option<Vec<i32>>>,
-        }
-
-        let invalid_page_size = RawRepr {
+    fn deserialization_validates_structure_and_normalizes_pages() {
+        assert_rejected(RawRepr {
+            version: FORMAT_VERSION + 1,
+            len: 0,
+            page_size: 1,
+            default: 0,
+            pages: Vec::new(),
+        });
+        assert_rejected(RawRepr {
             version: FORMAT_VERSION,
             len: 1,
             page_size: 0,
             default: 0,
             pages: Vec::new(),
-        };
-        let encoded =
-            bincode::serde::encode_to_vec(&invalid_page_size, bincode::config::standard()).unwrap();
-        let decoded = bincode::serde::decode_from_slice::<PagedVec<i32>, _>(
-            &encoded,
-            bincode::config::standard(),
-        );
-        assert!(decoded.is_err());
+        });
+
+        // `len = 3`, `page_size = 2` requires exactly two pages.
+        assert_rejected(RawRepr {
+            version: FORMAT_VERSION,
+            len: 3,
+            page_size: 2,
+            default: 0,
+            pages: vec![None],
+        });
+        assert_rejected(RawRepr {
+            version: FORMAT_VERSION,
+            len: 3,
+            page_size: 2,
+            default: 0,
+            pages: vec![None, None, None],
+        });
+
+        // A full page must have length two, and the final page length one.
+        assert_rejected(RawRepr {
+            version: FORMAT_VERSION,
+            len: 5,
+            page_size: 2,
+            default: 0,
+            pages: vec![Some(vec![1]), None, None],
+        });
+        assert_rejected(RawRepr {
+            version: FORMAT_VERSION,
+            len: 5,
+            page_size: 2,
+            default: 0,
+            pages: vec![Some(vec![1, 2, 3]), None, None],
+        });
+        assert_rejected(RawRepr {
+            version: FORMAT_VERSION,
+            len: 5,
+            page_size: 2,
+            default: 0,
+            pages: vec![None, None, Some(vec![1, 2])],
+        });
+
+        assert_rejected(RawRepr {
+            version: FORMAT_VERSION,
+            len: 0,
+            page_size: 1,
+            default: 0,
+            pages: vec![Some(vec![1])],
+        });
 
         let default_only_page = RawRepr {
             version: FORMAT_VERSION,
@@ -175,6 +229,25 @@ mod tests {
             bincode::serde::decode_from_slice(&encoded, bincode::config::standard()).unwrap();
         assert_eq!(decoded.non_default_len(), 0);
         assert_eq!(decoded.allocated_page_count(), 0);
+        assert_eq!(decoded.validate_invariants(), Ok(()));
+
+        let mixed_nonzero_default = RawRepr {
+            version: FORMAT_VERSION,
+            len: 5,
+            page_size: 4,
+            default: 9,
+            pages: vec![Some(vec![9, 3, 9, 4]), Some(vec![9])],
+        };
+        let encoded =
+            bincode::serde::encode_to_vec(&mixed_nonzero_default, bincode::config::standard())
+                .unwrap();
+        let (decoded, _): (PagedVec<i32>, usize) =
+            bincode::serde::decode_from_slice(&encoded, bincode::config::standard()).unwrap();
+        assert_eq!(decoded.to_vec(), vec![9, 3, 9, 4, 9]);
+        assert_eq!(decoded.non_default_len(), 2);
+        assert_eq!(decoded.allocated_page_count(), 1);
+        assert_eq!(decoded.allocated_page(0), Some(&[9, 3, 9, 4][..]));
+        assert_eq!(decoded.allocated_page(1), None);
         assert_eq!(decoded.validate_invariants(), Ok(()));
     }
 }

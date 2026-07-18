@@ -24,11 +24,23 @@ jobs:
       - name: Lint all features
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+      - name: Check feature configurations
+        run: |
+          cargo check --no-default-features
+          cargo check --features serde
+          cargo check --features bincode
+
       - name: Test all features
         run: cargo test --all-features
 
       - name: Test without default features
         run: cargo test --no-default-features
+
+      - name: Test serde feature
+        run: cargo test --features serde
+
+      - name: Test bincode feature
+        run: cargo test --features bincode
 
       - name: Build public documentation
         run: cargo doc --no-deps --all-features
