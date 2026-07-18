@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-//! A sparse, fixed-length vector backed by lazily allocated pages.
+//! A vector whose logical contents use lazily allocated fixed-size pages.
 //!
 //! [`PagedVec`] has a logical value at every index below [`PagedVec::len`], but
 //! only allocates physical storage for a page after that page receives a value
@@ -17,6 +17,12 @@
 //! values that differ from the default, while [`PagedVec::allocated_pages`]
 //! visits only physical page storage. These are deliberately different views:
 //! an allocated page can contain default-valued slots.
+//!
+//! The logical length can change through [`PagedVec::push`], [`PagedVec::pop`],
+//! [`PagedVec::resize`], [`PagedVec::truncate`], and [`PagedVec::clear`].
+//! Growing uses the configured default value, so it usually adds only dense
+//! page-table metadata rather than physical data pages. [`PagedVec::reset_all`]
+//! instead preserves the length while restoring every slot to that default.
 //!
 //! The current backend uses a dense `Vec<Option<Page<T>>>` page table. Page
 //! data is allocated lazily, but page-table metadata is proportional to
@@ -59,6 +65,22 @@
 //! assert_eq!(values.allocated_pages().count(), 1);
 //! assert_eq!(values.to_vec(), vec![0, 5, 0, 7, 0]);
 //! # Ok::<(), pagedvector::PagedVecError>(())
+//! ```
+//!
+//! # Changing length
+//!
+//! ```
+//! use pagedvector::PagedVec;
+//!
+//! let mut values = PagedVec::new(0, 0_i32, 4);
+//! values.resize(1_000_000);
+//! assert_eq!(values.allocated_page_count(), 0);
+//!
+//! values.push(7);
+//! assert_eq!(values.pop(), Some(7));
+//! values.truncate(4);
+//! values.reset_all(); // keeps four logical default-valued slots
+//! values.clear();     // removes every logical slot
 //! ```
 
 mod error;

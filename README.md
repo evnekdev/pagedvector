@@ -1,13 +1,14 @@
 # pagedvector
 
-`pagedvector` provides `PagedVec<T>`, a fixed-length logical vector whose
-physical storage is split into fixed-size pages. A page is allocated only after
-one of its values differs from a configured default value.
+`pagedvector` provides `PagedVec<T>`, a vector whose logical contents are split
+into lazily allocated fixed-size pages. A page is allocated only after one of
+its values differs from a configured default value.
 
-The crate has an invariant-safe core and read-only collection ergonomics. It
-is useful when page data dominates metadata and most logical values have a
-common default. It is not a drop-in `Vec<T>` replacement and does not claim to
-use constant memory for a very large logical length.
+The crate has an invariant-safe core, read-only collection ergonomics, and
+controlled dynamic-length operations. It is useful when page data dominates
+metadata and most logical values have a common default. It is not a drop-in
+`Vec<T>` replacement and does not claim to use constant memory for a very
+large logical length.
 
 ## Storage model
 
@@ -111,6 +112,49 @@ not mean the exact value is non-default.
 `into_vec` materialize the logical sequence. The materialization methods clone
 values because unallocated slots share one configured default value.
 
+## Dynamic length
+
+`PagedVec` can grow and shrink without compromising its sparse page accounting:
+
+- `push(value)` appends one value, allocating physical storage only if the
+  resulting page contains a non-default value;
+- `pop()` removes and returns the final value, cloning the configured default
+  when that final slot was unallocated;
+- `resize(new_len)` shrinks or grows using the configured default, unlike
+  `Vec::resize`, which accepts an explicit fill value;
+- `truncate(new_len)` only shrinks and is a no-op when `new_len >= len()`;
+- `clear()` drops all logical values and changes the length to zero;
+- `reset_all()` keeps the length but restores every logical slot to the default
+  and releases every physical page;
+- `Extend<T>` appends an iterator by applying `push` to each item.
+
+Growing with default-valued slots does not allocate data pages, although it can
+grow the dense page table. If an allocated partial final page is extended,
+`resize` clones the existing values and configured default into replacement
+storage before committing the new length. This gives `resize` a strong
+guarantee for clone panics: the vector is unchanged. `push` first grows the
+logical extent and then stores the new value, so a later panic while storing
+that value can leave a canonical, newly appended default-valued slot.
+
+```rust
+use pagedvector::PagedVec;
+
+let mut values = PagedVec::new(0, 0_i32, 4);
+values.resize(1_000_000);
+assert_eq!(values.allocated_page_count(), 0);
+
+values.extend([0, 3, 0, 4, 0]);
+values.push(5);
+assert_eq!(values.to_vec(), vec![0, 3, 0, 4, 0, 5]);
+assert_eq!(values.pop(), Some(5));
+
+values.truncate(3);
+values.reset_all();
+assert_eq!(values.to_vec(), vec![0, 0, 0]);
+values.clear();
+assert!(values.is_empty());
+```
+
 ## Invariants
 
 The implementation maintains these canonical rules after every safe mutation:
@@ -172,7 +216,7 @@ specific release date.
    iteration, `contains`, materialization, and logical equality documentation.
    Implemented in the current unreleased work.
 3. **Dynamic length** — `push`, `pop`, `resize`, `truncate`, `clear`,
-   `reset_all`, and `extend`.
+   `reset_all`, and `extend`. Implemented in the current unreleased work.
 4. **Controlled mutation** — richer closure updates, an entry API, mutation
    guards, and transformations, only where bookkeeping remains reliable.
 5. **Serialization stability** — compatibility policy, versioned format tests,
@@ -190,8 +234,13 @@ CI runs on stable Rust and executes:
 ```text
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo check --no-default-features
+cargo check --features serde
+cargo check --features bincode
 cargo test --all-features
 cargo test --no-default-features
+cargo test --features serde
+cargo test --features bincode
 cargo doc --no-deps --all-features
 cargo package
 ```

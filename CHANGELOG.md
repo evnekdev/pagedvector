@@ -6,6 +6,10 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- Checked construction through `try_new` and the `PagedVecError` error type.
+- `IndexOutOfBounds` for fallible mutation APIs.
+- `is_empty`, `page_size`, `page_index`, `page_offset`, `default_value`,
+  `non_default_len`, and physical-only `allocated_page` access.
 - Immutable logical iteration through `iter` and `IntoIterator for &PagedVec`.
 - Sparse `non_default_iter`, physical `allocated_pages`, and
   `allocated_page_indices` iterators.
@@ -15,6 +19,9 @@ All notable changes to this project are documented here.
 - `contains` plus documentation of equality's logical/default-based contract.
 - Property-based dense-model tests, public integration tests, and broader
   deserialization validation coverage.
+- Dynamic-length `push`, `pop`, `resize`, `truncate`, `clear`, `reset_all`,
+  and `Extend<T>` support with canonical page reclamation.
+- Dynamic model, integration, clone-panic, and serialization round-trip tests.
 
 ### Breaking changes
 
@@ -40,11 +47,3 @@ All notable changes to this project are documented here.
 - The final partial page now allocates only its logical number of values.
 - Deserialization uses a versioned representation, validates structural data,
   recounts non-default values, and discards default-only pages.
-
-### Added
-
-- Checked construction through `try_new` and the `PagedVecError` error type.
-- `IndexOutOfBounds` for fallible mutation APIs.
-- `is_empty`, `page_size`, `page_index`, `page_offset`, `default_value`,
-  `non_default_len`, and physical-only `allocated_page` access.
-- Unit, randomized model, and optional serialization round-trip tests.
