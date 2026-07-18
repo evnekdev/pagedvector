@@ -1,180 +1,152 @@
-# 📦 pagedvector (early experimental crate)
+# pagedvector
 
-A lightweight Rust crate implementing a **paged virtual vector** optimized for sparse data.
+`pagedvector` provides `PagedVec<T>`, a fixed-length logical vector whose
+physical storage is split into fixed-size pages. A page is allocated only after
+one of its values differs from a configured default value.
 
-It mimics how operating systems manage memory: instead of allocating a full vector, it only allocates memory for portions ("pages") that actually contain non-default values.
+The crate is currently preparing its `0.2.0` invariant-safe core. It is useful
+when page data dominates metadata and most logical values have a common
+default. It is not a drop-in `Vec<T>` replacement and does not claim to use
+constant memory for a very large logical length.
 
----
+## Storage model
 
-## 🚀 Features
+Every in-bounds logical index has a value:
 
-- 💾 Memory-efficient for sparse data
-- 📄 Fixed-size paging system
-- ⚡ Lazy allocation (allocate on write)
-- 🧹 Automatic deallocation when using `set()`
-- 🔍 Familiar API (`get`, `set`, indexing)
-- 📦 Serialization support (`serde`, `bincode`)
+- an unallocated page logically contains only the configured default;
+- an allocated page owns concrete storage for exactly its logical number of
+  slots;
+- the final page is partial when `len` is not divisible by `page_size`;
+- a page is deallocated as soon as all of its values return to the default.
 
----
+The current backend has a dense `Vec<Option<Page<T>>>` page table. Therefore
+page data is lazy, while page-table metadata remains proportional to
+`ceil(len / page_size)`. For an extremely large logical length with few writes,
+that metadata can still be substantial. A sparse page-map backend is a future
+performance investigation, not a property of this release.
 
-## 🧠 Concept
+`PagedVec` is non-contiguous. It intentionally does not implement range slices,
+`Deref<Target = [T]>`, `AsRef<[T]>`, or `Borrow<[T]>`.
 
-Instead of storing a full vector of size `N`, `PagedVec`:
-
-1. Splits the vector into equal-sized pages
-2. Stores pages as `Option<Page<T>>`
-3. Allocates a page only when needed
-4. Deallocates when all values return to default
-
----
-
-## 🛠 Example
+## Safe core API
 
 ```rust
 use pagedvector::PagedVec;
 
-fn main() {
-    let mut vec = PagedVec::new(1_000_000, 0u32, 1024);
+let mut values = PagedVec::new(1_000_000, 0_u32, 1_024);
 
-    // No memory allocated yet
-    assert_eq!(vec.number_pages_alloc(), 0);
+assert_eq!(values.len(), 1_000_000);
+assert_eq!(values.get(42), Some(&0));
+assert_eq!(values.allocated_page_count(), 0);
 
-    // Write value
-    vec.set(42, 100);
+values.set(42, 100)?;
+assert_eq!(values[42], 100);
+assert_eq!(values.non_default_len(), 1);
 
-    // Now one page is allocated
-    assert!(vec.number_pages_alloc() > 0);
-
-    // Read values
-    assert_eq!(vec[42], 100);
-    assert_eq!(vec[43], 0);
-
-    // Reset to default
-    vec.set(42, 0);
-}
+values.reset(42)?;
+assert_eq!(values.allocated_page_count(), 0);
+# Ok::<(), pagedvector::IndexOutOfBounds>(())
 ```
 
----
+`get` follows normal collection conventions: it returns `None` for an
+out-of-bounds index. `Index<usize>` is also available and panics out of bounds.
+For in-bounds indices in unallocated pages, both return the configured default.
 
-## 📚 API
+Mutation is controlled through `set`, `reset`, and `update`:
 
-### Create
+- `set(index, value)` and `reset(index)` return `Result<(), IndexOutOfBounds>`;
+- `update(index, f)` invokes `f` on a detached copy and commits only when the
+  closure returns normally, so a panicking closure leaves the vector unchanged;
+- no safe API returns `&mut T` or `&mut [T]`, because such references could
+  bypass the counters required to reclaim pages.
 
-```rust
-let vec = PagedVec::new(length, default_value, page_size);
-```
+The most relevant inspection methods are `page_size`, `page_count`,
+`allocated_page_count`, `non_default_len`, `default_value`, `page_index`,
+`page_offset`, and `allocated_page`. `allocated_page` exposes only concrete
+physical storage; it does not manufacture a default-filled slice for an
+unallocated page.
 
-### Access
+## Invariants
 
-```rust
-vec.get(i);
-vec.set(i, val);
-vec[i];
-```
+The implementation maintains these canonical rules after every safe mutation:
 
-### Modify
+1. page size is non-zero;
+2. logical indices are valid only below `len`;
+3. unallocated pages logically contain only the default;
+4. every allocated page has at least one non-default value;
+5. each page counter exactly equals its number of non-default values;
+6. a page with a zero counter is immediately deallocated;
+7. page-table length is `ceil(len / page_size)`;
+8. allocated page storage has exactly its logical length, including a partial
+   final page;
+9. the global non-default counter equals the sum of page counters.
 
-```rust
-vec.set(i, value);
-```
+Debug builds check these invariants after every mutation. The test suite also
+checks them after every operation in a randomized model test.
 
-### Inspect
+## Construction and serialization
 
-```rust
-vec.len();
-vec.is_default(i);
-vec.number_pages_total();
-vec.number_pages_alloc();
-```
+`PagedVec::new` panics when `page_size` is zero. Use `try_new` with fallible
+input; it returns `PagedVecError::ZeroPageSize`.
 
----
-
-## ⚠️ Notes
-
-- Requires `T: Clone + PartialEq`
-- Uses `assert!` for bounds (panics if invalid index)
-- Performance depends on `page_size`
-
----
-
-## 💡 Use Cases
-
-- Sparse arrays
-- Simulations
-- Game worlds
-- Scientific data
-- Memory-constrained environments
-
----
-## RoadMap
- Implement more methods to get `Vec<T>`-like feel:
-
-  - is_empty()
-  - page_size()
-  - capacity_pages()
-  - clear()
-  - fill(value)
-  - contains(&value)
-
-  - get(index) -> Option<&T>
-  - get_mut(index) -> Option<&mut T>
-
-  - v[i]      // panics
-  - v.get(i) // returns Option
-
-  - iter()
-  - iter_mut()
-  - enumerate_non_default()
-  - count_non_default()
-  - allocated_pages()
-  - deallocate_empty_pages()
-
-
-  - resize(new_len, default)
-  - truncate(new_len)
-  - push(value)
-  - pop()
-  - extend(iter)
-
-  - Default
-  - From<Vec<T>>
-  - FromIterator<T>
-  - Extend<T>
-  - IntoIterator
-
-
-  - is_allocated(index) -> bool
-  - is_page_allocated(page_index) -> bool
-  - page_index(index) -> usize
-  - page_offset(index) -> usize
-  - allocated_page_indices()
-  - non_default_len()
-  - sparsity()
-  - memory_len_allocated()
-
-  - allocated_fraction()
-  - default_fraction()
-
-  - to_vec()
-  - into_vec()
-  - from_vec(vec, default, psize)
-
-  - shrink_pages()
-  - recount_page(page_index)
-  - recount_all_pages()
-  - deallocate_default_pages()
-
----
-
-## 📦 Dependencies
+Serialization is opt-in:
 
 ```toml
-serde = { version = "1", features = ["derive"] }
-bincode = "2"
+[dependencies]
+pagedvector = { version = "0.2", features = ["serde"] }
 ```
 
----
+The `bincode` feature enables the optional `bincode` dependency in addition to
+serde. Serialization uses a private, versioned representation of logical
+fields and page values, never trusted page or global counters. Deserialization
+validates page sizes, page count, and page lengths; it recounts values and
+normalizes default-only pages. The representation is not yet a stable wire
+format.
 
-## 📄 License
+## 0.2 breaking changes
 
-MIT License (see LICENSE file)
+This release removes `get_mut`, `get_page_slice_mut`, `IndexMut`, and all
+page-slice/range-slice APIs. It also replaces the panicking `get` with
+`Option<&T>`, renames page-count methods, makes `set` fallible, and makes serde
+dependencies optional. See [CHANGELOG.md](CHANGELOG.md) for the complete list.
+
+## Roadmap
+
+The roadmap is staged deliberately; none of these items are promises of a
+specific release date.
+
+1. **Invariant-safe core** — safe access, set/reset, canonical counters,
+   correct final-page sizing, tests, CI. This is the current milestone.
+2. **Read-only ergonomics** — iteration, non-default iteration, allocated-page
+   iteration, `contains`, materialization, and logical equality refinements.
+3. **Dynamic length** — `push`, `pop`, `resize`, `truncate`, `clear`,
+   `reset_all`, and `extend`.
+4. **Controlled mutation** — richer closure updates, an entry API, mutation
+   guards, and transformations, only where bookkeeping remains reliable.
+5. **Serialization stability** — compatibility policy, versioned format tests,
+   and documented support guarantees.
+6. **Performance and backends** — benchmarks and comparison of the dense page
+   table with sparse page-map backends.
+
+`iter_mut`, `IndexMut`, arbitrary range slices, and slice-deref conversions are
+not roadmap goals because they conflict with the accounting or layout model.
+
+## Development checks
+
+CI runs on stable Rust and executes:
+
+```text
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features
+cargo test --no-default-features
+cargo doc --no-deps --all-features
+cargo package
+```
+
+An MSRV has not yet been declared; stable Rust is the supported toolchain until
+the project establishes and continuously tests one.
+
+## License
+
+Licensed under either of MIT or Apache-2.0, at your option.
